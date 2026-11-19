@@ -39,7 +39,7 @@
 </main></div>
 <script>
 (() => {
- const PLAYLIST='https://iptv-org.github.io/iptv/countries/us.m3u';
+ const PLAYLIST='https://cdn.jsdelivr.net/gh/streamline-iptv/iptv-playlists@dist/index.m3u';
  const $=id=>document.getElementById(id);
  const state={directory:[],playlist:[],favorites:new Set(JSON.parse(localStorage.getItem('sxtv-favorites')||'[]')),view:'all',category:'all',selected:null,hls:null};
  const video=$('video');
