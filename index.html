@@ -31,7 +31,7 @@
   <button class="btn primary" id="reloadChannels">↻ Refresh channel lineup</button>
   <button class="btn" id="fullscreen">⛶ Fullscreen</button>
  </div>
- <div class="notice"><strong>About the lineup:</strong> Sx TV automatically loads IPTV-org’s publicly listed United States playlist. Availability, geographic restrictions, browser compatibility, and broadcaster permissions vary by channel. Sx TV is an independent player and is not affiliated with IPTV-org or any broadcaster.</div>
+ <div class="notice"><strong>About the lineup:</strong> Sx TV automatically loads IPTV-org’s publicly listed United States playlist. A channel appearing in this guide does not guarantee it will play. Some sources are offline, browser-incompatible, or restrict embedding. HLS and common direct-video formats are supported where the broadcaster allows playback. Sx TV is an independent player and is not affiliated with IPTV-org or any broadcaster.</div>
  <div class="sectionhead"><h2>Channel guide</h2><span class="count" id="count">0 channels</span></div>
  <div class="filters" id="filters"><button class="chip active" data-cat="all">All</button><button class="chip" data-cat="news">News</button><button class="chip" data-cat="sports">Sports</button><button class="chip" data-cat="entertainment">Entertainment</button><button class="chip" data-cat="movies">Movies</button><button class="chip" data-cat="kids">Kids</button><button class="chip" data-cat="music">Music</button><button class="chip" data-cat="general">General</button></div>
  <div id="channelGrid" class="grid"><div class="empty">Loading the United States channel directory…</div></div>
@@ -49,10 +49,67 @@
  function parseM3U(text){const lines=text.replace(/^\uFEFF/,'').split(/\r?\n/);const out=[];let meta=null;for(const raw of lines){const line=raw.trim();if(!line)continue;if(line.startsWith('#EXTINF')){const comma=line.indexOf(',');const head=comma>=0?line.slice(0,comma):line;const name=comma>=0?line.slice(comma+1).trim():'Unknown channel';const attr={};for(const m of head.matchAll(/([\w-]+)="([^"]*)"/g))attr[m[1]]=m[2];meta={name,id:attr['tvg-id']||'',logo:safeUrl(attr['tvg-logo']||''),category:attr['group-title']||'General'};}else if(!line.startsWith('#')){const url=safeUrl(line);if(url){out.push({...meta||{name:'Unknown channel',id:'',logo:null,category:'Uncategorized'},url});}meta=null;}}return out;}
  function merged(){return state.playlist.map((s,i)=>({...s,id:s.id||'channel-'+i,stream:s,categories:[String(s.category||'General').toLowerCase()]}));}
  function categories(c){return (c.categories||[c.category||'general']).map(x=>String(x).toLowerCase());}
- function render(){let list=merged();if(state.view==='favorites')list=list.filter(c=>state.favorites.has(c.id));else if(['news','sports','entertainment'].includes(state.view))list=list.filter(c=>categories(c).some(x=>x.includes(state.view)));if(state.category!=='all')list=list.filter(c=>categories(c).some(x=>x.includes(state.category)));const q=$('search').value.trim().toLowerCase();if(q)list=list.filter(c=>(c.name||'').toLowerCase().includes(q)||(c.id||'').toLowerCase().includes(q)||categories(c).join(' ').includes(q));$('count').textContent=list.length+' channels';$('channelGrid').innerHTML=list.length?list.map(c=>{const active=state.selected&&state.selected.id===c.id;const playable=!!c.stream;const logo=c.logo?`<img class="logo" src="${esc(c.logo)}" alt="" loading="lazy" onerror="this.outerHTML='<div class=\'logo letterlogo\'>${esc((c.name||'TV').slice(0,2).toUpperCase())}</div>'">`:`<div class="logo letterlogo">${esc((c.name||'TV').slice(0,2).toUpperCase())}</div>`;return `<button class="channel ${active?'selected':''}" data-id="${esc(c.id)}" title="${playable?'Play '+esc(c.name):'No imported stream for this channel'}">${logo}<span class="chinfo"><span class="chname">${esc(c.name)}</span><span class="chcat">${esc(categories(c).slice(0,2).join(' · '))}${playable?' · Ready':' · Directory'}</span></span><span class="star" data-star="${esc(c.id)}">${state.favorites.has(c.id)?'★':'☆'}</span></button>`}).join(''):'<div class="empty">No channels found. Try another search or category.</div>';}
+ function streamKind(url){
+   if(/\.m3u8(?:$|[?#])/i.test(url)) return 'hls';
+   if(/\.(?:mp4|m4v|webm|ogv|ogg)(?:$|[?#])/i.test(url)) return 'direct';
+   if(/\.(?:mpd|ts|m3u)(?:$|[?#])/i.test(url)) return 'unsupported';
+   return 'unknown';
+ }
+ function render(){let list=merged();if(state.view==='favorites')list=list.filter(c=>state.favorites.has(c.id));else if(['news','sports','entertainment'].includes(state.view))list=list.filter(c=>categories(c).some(x=>x.includes(state.view)));if(state.category!=='all')list=list.filter(c=>categories(c).some(x=>x.includes(state.category)));const q=$('search').value.trim().toLowerCase();if(q)list=list.filter(c=>(c.name||'').toLowerCase().includes(q)||(c.id||'').toLowerCase().includes(q)||categories(c).join(' ').includes(q));$('count').textContent=list.length+' channels';$('channelGrid').innerHTML=list.length?list.map(c=>{const active=state.selected&&state.selected.id===c.id;const playable=!!c.stream;const kind=playable?streamKind(c.stream.url):'none';const logo=c.logo?`<img class="logo" src="${esc(c.logo)}" alt="" loading="lazy" onerror="this.outerHTML='<div class=\'logo letterlogo\'>${esc((c.name||'TV').slice(0,2).toUpperCase())}</div>'">`:`<div class="logo letterlogo">${esc((c.name||'TV').slice(0,2).toUpperCase())}</div>`;return `<button class="channel ${active?'selected':''}" data-id="${esc(c.id)}" title="${playable?'Play '+esc(c.name):'No imported stream for this channel'}">${logo}<span class="chinfo"><span class="chname">${esc(c.name)}</span><span class="chcat">${esc(categories(c).slice(0,2).join(' · '))}${!playable?' · Directory':kind==='hls'?' · HLS':kind==='direct'?' · Video':kind==='unsupported'?' · Unsupported':' · Test stream'}</span></span><span class="star" data-star="${esc(c.id)}">${state.favorites.has(c.id)?'★':'☆'}</span></button>`}).join(''):'<div class="empty">No channels found. Try another search or category.</div>';}
  function selectChannel(id){const c=merged().find(x=>x.id===id);if(!c)return;if(!c.stream)return;state.selected=c;play(c);render();}
- function play(c){if(state.hls){state.hls.destroy();state.hls=null;}video.pause();video.removeAttribute('src');video.load();$('placeholder').classList.add('hidden');video.classList.remove('hidden');$('nowTitle').textContent=c.name;$('nowMeta').textContent=(c.category||categories(c)[0]||'Live TV')+' · Sx TV';if(c.logo){$('nowLogo').src=c.logo;$('nowLogo').classList.remove('hidden')}else $('nowLogo').classList.add('hidden');const url=c.stream.url;if(/\.m3u8($|\?)/i.test(url)){if(window.Hls&&Hls.isSupported()){state.hls=new Hls({enableWorker:true});state.hls.loadSource(url);state.hls.attachMedia(video);state.hls.on(Hls.Events.ERROR,(_,d)=>{if(d.fatal)$('nowMeta').textContent='Stream playback error — this stream may be unavailable or browser-incompatible.';});}else if(video.canPlayType('application/vnd.apple.mpegurl'))video.src=url;else{$('nowMeta').textContent='This browser cannot play this HLS stream.';return;}}else video.src=url;video.play().catch(()=>{$('nowMeta').textContent='Press Play to start. If it fails, the stream may block browser playback.';});}
- $('channelGrid').addEventListener('click',e=>{const star=e.target.closest('[data-star]');if(star){e.stopPropagation();const id=star.dataset.star;state.favorites.has(id)?state.favorites.delete(id):state.favorites.add(id);localStorage.setItem('sxtv-favorites',JSON.stringify([...state.favorites]));render();return;}const b=e.target.closest('[data-id]');if(b)selectChannel(b.dataset.id);});
+ function showPlaybackError(message){$('nowMeta').textContent=message;}
+  function play(c){
+    if(state.hls){state.hls.destroy();state.hls=null;}
+    video.pause();video.removeAttribute('src');video.load();
+    video.onerror=()=>{
+      const code=video.error?.code;
+      const detail=code===2?'Network error loading this stream.':code===3?'Chrome could not decode this video format.':code===4?'The broadcaster rejected playback or the format is unsupported.':'This stream could not be played in Chrome.';
+      showPlaybackError(detail+' Try another channel.');
+    };
+    $('placeholder').classList.add('hidden');video.classList.remove('hidden');
+    $('nowTitle').textContent=c.name;
+    $('nowMeta').textContent=(c.category||categories(c)[0]||'Live TV')+' · Loading stream…';
+    if(c.logo){$('nowLogo').src=c.logo;$('nowLogo').classList.remove('hidden')}else $('nowLogo').classList.add('hidden');
+    const url=c.stream.url,kind=streamKind(url);
+    if(kind==='unsupported'){
+      showPlaybackError('This channel uses a format Chrome cannot play directly. Try another channel.');
+      video.classList.add('hidden');$('placeholder').classList.remove('hidden');
+      $('placeholder').innerHTML='<div class="tv">📺</div><h2>Unsupported stream format</h2><div>This stream is not supported by the built-in browser player.</div>';
+      return;
+    }
+    if(kind==='hls'){
+      if(window.Hls&&Hls.isSupported()){
+        const hls=new Hls({enableWorker:true,maxBufferLength:20});state.hls=hls;
+        hls.on(Hls.Events.MEDIA_ATTACHED,()=>hls.loadSource(url));
+        hls.on(Hls.Events.MANIFEST_PARSED,()=>{
+          showPlaybackError('Stream loaded. Press Play if it does not start.');
+          video.play().catch(()=>showPlaybackError('Stream loaded. Press Play to start.'));
+        });
+        hls.on(Hls.Events.ERROR,(_,data)=>{
+          if(!data.fatal)return;
+          if(data.type===Hls.ErrorTypes.NETWORK_ERROR)showPlaybackError('The stream server did not respond or blocks this request. Try another channel.');
+          else if(data.type===Hls.ErrorTypes.MEDIA_ERROR){
+            showPlaybackError('Chrome had trouble decoding this stream. Attempting recovery…');
+            try{hls.recoverMediaError()}catch(e){showPlaybackError('This stream is not compatible with Chrome. Try another channel.')}
+          }else{
+            showPlaybackError('This stream is unavailable or blocks browser playback. Try another channel.');
+            hls.destroy();if(state.hls===hls)state.hls=null;
+          }
+        });
+        hls.attachMedia(video);
+      }else if(video.canPlayType('application/vnd.apple.mpegurl')){
+        video.src=url;showPlaybackError('HLS stream selected. Press Play to start.');
+      }else{
+        showPlaybackError('This browser does not support HLS playback.');
+        video.classList.add('hidden');$('placeholder').classList.remove('hidden');
+        $('placeholder').innerHTML='<div class="tv">📺</div><h2>HLS not supported</h2><div>Your browser cannot play this HLS stream.</div>';
+      }
+      return;
+    }
+    video.src=url;
+    showPlaybackError(kind==='direct'?'Direct video stream selected. Press Play to start.':'Trying this stream. Press Play to start; some sources do not support browser playback.');
+  }
+  $('channelGrid').addEventListener('click',e=>{const star=e.target.closest('[data-star]');if(star){e.stopPropagation();const id=star.dataset.star;state.favorites.has(id)?state.favorites.delete(id):state.favorites.add(id);localStorage.setItem('sxtv-favorites',JSON.stringify([...state.favorites]));render();return;}const b=e.target.closest('[data-id]');if(b)selectChannel(b.dataset.id);});
  $('search').addEventListener('input',render);
  document.querySelectorAll('.navbtn').forEach(b=>b.addEventListener('click',()=>{document.querySelectorAll('.navbtn').forEach(x=>x.classList.remove('active'));b.classList.add('active');state.view=b.dataset.view;state.category='all';document.querySelectorAll('.chip').forEach(x=>x.classList.toggle('active',x.dataset.cat==='all'));$('viewTitle').textContent=state.view==='all'?'All channels':state.view==='favorites'?'My favorites':state.view[0].toUpperCase()+state.view.slice(1);render();}));
  $('filters').addEventListener('click',e=>{const b=e.target.closest('[data-cat]');if(!b)return;state.category=b.dataset.cat;document.querySelectorAll('.chip').forEach(x=>x.classList.toggle('active',x===b));render();});
